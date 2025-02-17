@@ -1,0 +1,592 @@
+#include <iostream>
+#include <vector>
+#include <string>
+#include <map>
+#include <fstream>  
+#include <iomanip>
+#include <limits>
+#include <thread>
+#include <chrono>
+#include <random>
+using namespace std;
+#define RESET "\033[0m"
+#define RED "\033[31m"
+#define GREEN "\033[32m"
+#define YELLOW "\033[33m"
+#define BLUE "\033[34m"
+#define MAGENTA "\033[35m"
+#define CYAN "\033[36m"
+// Medicine class
+class Medicine {
+private:
+    string name, manufacturer, expiryDate;
+    int quantity;
+    double price;
+
+public:
+    Medicine(string name, string manufacturer, string expiryDate, int quantity, double price)
+        : name(name), manufacturer(manufacturer), expiryDate(expiryDate), quantity(quantity), price(price) {}
+
+    string getName() const { return name; }
+    string getManufacturer() const { return manufacturer; }
+    string getExpiryDate() const { return expiryDate; }
+    int getQuantity() const { return quantity; }
+    double getPrice() const { return price; }
+
+    void updateQuantity(int newQuantity) { quantity = newQuantity; }
+
+    void sell(int amount) {
+        if (amount <= quantity) {
+            quantity -= amount;
+        } else {
+            cout << RED << "Not enough stock of " << name << "." << RESET << endl;
+        }
+    }
+
+    void display() const {
+        cout << left << setw(15) << name << setw(20) << manufacturer
+             << setw(15) << expiryDate << setw(10) << quantity << "Tk" << price << endl;
+    }
+
+    // Save the medicine details to a file
+    void saveToFile(ofstream &outFile) const {
+        outFile << name << " " << manufacturer << " " << expiryDate << " "
+                << quantity << " " << price << endl;
+    }
+};
+
+// Sale record class
+class SaleRecord {
+private:
+    string medicineName;
+    int quantitySold;
+    double totalCost;
+
+public:
+    SaleRecord(string name, int quantity, double cost)
+        : medicineName(name), quantitySold(quantity), totalCost(cost) {}
+
+    void display() const {
+        cout << left << setw(15) << medicineName << setw(15) << quantitySold << "Tk" << totalCost << endl;
+    }
+
+    double getTotalCost() const { return totalCost; }
+
+    // Save the sale record to a file
+    void saveToFile(ofstream &outFile) const {
+        outFile << medicineName << " " << quantitySold << " " << totalCost << endl;
+    }
+};
+
+// Pharmacy class
+class Pharmacy {
+private:
+    vector<Medicine> medicines;
+    vector<SaleRecord> sales;
+
+    void showLoading() const {
+        cout << CYAN << "Loading";
+        for (int i = 0; i < 3; ++i) {
+            this_thread::sleep_for(chrono::seconds(1));
+            cout << "." << flush;
+        }
+        cout << RESET << endl;
+    }
+
+   
+    void randomDelay() const {
+        random_device rd;
+        mt19937 gen(rd());
+        uniform_int_distribution<> dis(600, 2000); 
+
+        int delayTime = dis(gen);
+        this_thread::sleep_for(chrono::milliseconds(delayTime));
+    }
+
+public:
+    void displayHeader(const string &title) const {
+        showLoading();
+        system("clear");
+        cout << CYAN << "========== " << title << " ==========\n" << RESET;
+    }
+
+    void addMedicine(const string& name, const string& manufacturer, const string& expiryDate, int quantity, double price) {
+        medicines.emplace_back(name, manufacturer, expiryDate, quantity, price);
+        cout << GREEN << "Medicine " << name << " added successfully." << RESET << endl;
+
+        // Save to file
+        ofstream outFile("medicines.txt", ios::app);
+        if (outFile.is_open()) {
+            medicines.back().saveToFile(outFile);
+            outFile.close();
+        } else {
+            cout << RED << "Error saving medicine details to file." << RESET << endl;
+        }
+    }
+
+    void displayMedicines() {
+        displayHeader("     Available Medicines    ");
+
+        randomDelay();  
+
+        if (medicines.empty()) {
+            cout << RED << "No medicines available." << RESET << endl;
+            return;
+        }
+        cout << left << setw(15) << "Name" << setw(20) << "Manufacturer" << setw(15)
+             << "Expiry Date" << setw(10) << "Quantity" << "Price\n";
+        cout << "---------------------------------------------------------------\n";
+        for (const auto& medicine : medicines) {
+            medicine.display();
+        }
+
+        cout << YELLOW << "Press Enter to exit..." << RESET;
+        cin.ignore(); 
+        cin.get();    
+    }
+
+    void searchMedicine(const string& name) {
+        displayHeader("Search Medicine");
+        randomDelay();  
+
+        for (const auto& medicine : medicines) {
+            if (medicine.getName() == name) {
+                cout << GREEN << "Medicine found:\n" << RESET;
+                medicine.display();
+                return;
+            }
+        }
+        cout << RED << "Medicine " << name << " not found." << RESET << endl;
+    }
+
+    void sellMedicine() {
+        displayHeader("Sell Medicine");
+        randomDelay();  
+
+        int numMedicines;
+        cout << YELLOW << "How many different medicines would you like to sell? ";
+        cin >> numMedicines;
+
+        while (numMedicines--) {
+            string name;
+            int amount;
+            cout << YELLOW << "Enter medicine name to sell: ";
+            cin >> name;
+            cout << YELLOW << "Enter quantity to sell: ";
+            cin >> amount;
+
+            bool medicineFound = false;
+            for (auto& medicine : medicines) {
+                if (medicine.getName() == name) {
+                    medicineFound = true;
+                    if (amount <= medicine.getQuantity()) {
+                        double cost = amount * medicine.getPrice();
+                        sales.emplace_back(name, amount, cost);
+                        medicine.sell(amount);
+                        cout << GREEN << amount << " units of " << name << " sold successfully." << RESET << endl;
+
+                        // Save sale record to file
+                        ofstream saleFile("sales.txt", ios::app);
+                        if (saleFile.is_open()) {
+                            sales.back().saveToFile(saleFile);
+                            saleFile.close();
+                        } else {
+                            cout << RED << "Error saving sale record to file." << RESET << endl;
+                        }
+                    } else {
+                        cout << RED << "Not enough stock of " << name << "." << RESET << endl;
+                    }
+                    break;
+                }
+            }
+
+            if (!medicineFound) {
+                cout << RED << "Medicine " << name << " not found." << RESET << endl;
+            }
+        }
+    }
+
+    void updateStock(const string& name, int newQuantity) {
+        displayHeader("Update Stock");
+        randomDelay();  
+
+        for (auto& medicine : medicines) {
+            if (medicine.getName() == name) {
+                medicine.updateQuantity(newQuantity);
+                cout << GREEN << "Stock updated for " << name << "." << RESET << endl;
+                return;
+            }
+        }
+        cout << RED << "Medicine " << name << " not found." << RESET << endl;
+    }
+
+    void displaySales() {
+        displayHeader("Sales Records");
+        randomDelay();  
+
+        if (sales.empty()) {
+            cout << RED << "No sales records available." << RESET << endl;
+            return;
+        }
+        cout << left << setw(15) << "Medicine Name" << setw(15) << "Quantity" << "Total Cost\n";
+        cout << "-----------------------------------------------------\n";
+        for (const auto& sale : sales) {
+            sale.display();
+        }
+    }
+
+    void displayRevenue() const {
+        displayHeader("Total Revenue");
+        randomDelay(); 
+
+        double totalRevenue = 0;
+        for (const auto& sale : sales) {
+            totalRevenue += sale.getTotalCost();
+        }
+        cout << "Total Revenue: Tk" << totalRevenue << endl;
+
+        // Save total revenue to file
+        ofstream revenueFile("revenue.txt");
+        if (revenueFile.is_open()) {
+            revenueFile << "Total Revenue: Tk" << totalRevenue << endl;
+            revenueFile.close();
+        } else {
+            cout << RED << "Error saving revenue to file." << RESET << endl;
+        }
+    }
+
+    void printReceiptAndMakePayment() {
+        displayHeader("Receipt and Payment");
+        randomDelay();  
+
+        if (sales.empty()) {
+            cout << RED << "No sales records available to print a receipt." << RESET << endl;
+            return;
+        }
+
+        double totalCost = 0;
+        cout << left << setw(15) << "Medicine Name" << setw(15) << "Quantity" << "Total Cost\n";
+        cout << "-----------------------------------------------------\n";
+        for (const auto& sale : sales) {
+            sale.display();
+            totalCost += sale.getTotalCost();
+        }
+        cout << "-----------------------------------------------------\n";
+        cout << "Total Amount: Tk" << totalCost << endl;
+
+        double payment;
+        cout << YELLOW << "Enter payment amount: Tk";
+        cin >> payment;
+
+        if (payment >= totalCost) {
+            cout << GREEN << "Payment successful. Change: Tk" << payment - totalCost << RESET << "\n";
+        } else {
+            cout << RED << "Insufficient payment. Transaction failed." << RESET << endl;
+        }
+    }
+
+    // Menu Function 
+    void displayMenu() {
+        int choice;
+        while (true) {
+            this->displayHeader("Pharmacy Management System");  
+            cout << BLUE << "1. Add Medicine\n";
+            cout << BLUE << "2. Display Medicines\n";
+            cout << BLUE << "3. Search Medicine\n";
+            cout << BLUE << "4. Sell Medicine\n";
+            cout << BLUE << "5. Update Stock\n";
+            cout << BLUE << "6. Display Sales Records\n";
+            cout << BLUE << "7. Display Total Revenue\n";
+            cout << BLUE << "8. Print Receipt and Make Payment\n";
+            cout << BLUE << "9. Log out\n" << RESET;
+            cout << YELLOW << "Enter your choice: ";
+            cin >> choice;
+
+            if (cin.fail() || choice < 1 || choice > 9) {
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cout << RED << "Invalid choice. Please try again." << RESET << endl;
+                continue;
+            }
+
+            system("clear"); 
+            if (choice == 1) {
+                string name, manufacturer, expiryDate;
+                int quantity;
+                double price;
+
+                cout << YELLOW << "Enter medicine name: ";
+                cin >> name;
+                cout << YELLOW << "Enter manufacturer: ";
+                cin >> manufacturer;
+                cout << YELLOW << "Enter expiry date (DD/MM/YYYY) : ";
+                cin >> expiryDate;
+                cout << YELLOW << "Enter quantity : ";
+                cin >> quantity;
+                cout << YELLOW << "Enter price (Tk) : ";
+                cin >> price;
+
+                this->addMedicine(name, manufacturer, expiryDate, quantity, price);  
+            } else if (choice == 2) {
+                this->displayMedicines();
+            } else if (choice == 3) {
+                string name;
+                cout << YELLOW << "Enter medicine name to search: ";
+                cin >> name;
+                this->searchMedicine(name);
+            } else if (choice == 4) {
+                this->sellMedicine();
+            } else if (choice == 5) {
+                string name;
+                int newQuantity;
+                cout << YELLOW << "Enter medicine name to update stock: ";
+                cin >> name;
+                cout << YELLOW << "Enter new quantity: ";
+                cin >> newQuantity;
+                this->updateStock(name, newQuantity);
+            } else if (choice == 6) {
+                this->displaySales();
+            } else if (choice == 7) {
+                this->displayRevenue();
+            } else if (choice == 8) {
+                this->printReceiptAndMakePayment();
+            } else if (choice == 9) {
+                cout << GREEN <<"    " <<"Logging out Pharmacy Management System..." << RESET << endl;
+               cout << MAGENTA <<"     " <<"Thank you for using our services!" << RESET << endl;
+               cout << BLUE <<"    " <<"We look forward to serving you again..." << RESET << endl;
+                break;
+            }
+        }
+    }
+};
+
+class UserManagement {
+private:
+    map<string, pair<string, string>> users; 
+
+    void showLoading() const { 
+        cout << CYAN << "Loading";
+        for (int i = 0; i < 3; ++i) {
+            this_thread::sleep_for(chrono::seconds(1));
+            cout << "." << flush;
+        }
+        cout << RESET << endl;
+    }
+
+    void displayHeader(const string &title) const { 
+        showLoading();
+        system("clear");
+        cout << CYAN << "\n========================================\n" << RESET;
+        cout << GREEN << "      " << title << "\n" << RESET;
+        cout << CYAN << "========================================\n" << RESET;
+    }
+
+    void displayFooter() const { 
+        cout << CYAN << "----------------------------------------\n" << RESET;
+    }
+
+    void displayMessage(const string &message, const string &color = RESET) const {
+        cout << color << message << "\n" << RESET;
+    }
+
+    bool validateInput(const string &input, const string &field) const { 
+        if (input.empty()) {
+            displayMessage(field + " cannot be empty! Please try again.", RED);
+            return false;
+        }
+        return true;
+    }
+
+    void showStatistics() const { 
+        cout << MAGENTA << "\nCurrent Registered Users: " << users.size() << RESET << "\n";
+    }
+
+    void loadUsers() {
+        ifstream file("users.txt");
+        string username, password, email;
+
+        while (file >> username >> password >> email) {
+            users[username] = {password, email};
+        }
+    }
+
+    void saveUsers() const { 
+        ofstream file("users.txt");
+        for (const auto &user : users) {
+            file << user.first << " " << user.second.first << " " << user.second.second << endl;
+        }
+    }
+
+public:
+    UserManagement() {
+        loadUsers(); 
+    }
+
+    ~UserManagement() {
+        saveUsers();  
+    }
+
+    void signUp() {
+        displayHeader("User Registration");
+        string username, password, email;
+
+        cout << YELLOW << "Enter Username: " << RESET;
+        cin >> username;
+        if (!validateInput(username, "Username")) return;
+
+        if (users.find(username) != users.end()) {
+            displayMessage("Username already exists! Please choose another.", RED);
+            return;
+        }
+
+        cout << YELLOW << "Enter Password: " << RESET;
+        cin >> password;
+        if (!validateInput(password, "Password")) return;
+
+        cout << YELLOW << "Enter Email: " << RESET;
+        cin >> email;
+        if (!validateInput(email, "Email")) return;
+
+        users[username] = {password, email};
+        displayMessage("User registered successfully!", GREEN);
+        displayFooter();
+    }
+
+    void login() {
+        displayHeader("User Login");
+        string username, password;
+
+        cout << YELLOW << "Enter Username: " << RESET;
+        cin >> username;
+
+        if (users.find(username) == users.end()) {
+            displayMessage("User not found! Please sign up first.", RED);
+            return;
+        }
+
+        cout << YELLOW << "Enter Password: " << RESET;
+        cin >> password;
+
+        if (users[username].first == password) {
+            displayMessage("Login successful! Welcome back, " + username + "!", GREEN);
+            
+            Pharmacy pharmacy; 
+            pharmacy.displayMenu(); 
+            
+            
+        } else {
+            displayMessage("Incorrect password! Please try again.", RED);
+        }
+        displayFooter();
+    }
+
+    void forgetPassword() {
+        displayHeader("Password Recovery");
+        string username, email;
+
+        cout << YELLOW << "Enter Username: " << RESET;
+        cin >> username;
+
+        if (users.find(username) == users.end()) {
+            displayMessage("User not found! Please check the username.", RED);
+            return;
+        }
+
+        cout << YELLOW << "Enter Registered Email: " << RESET;
+        cin >> email;
+
+        if (users[username].second == email) {
+            displayMessage("Your password is: " + users[username].first, GREEN);
+        } else {
+            displayMessage("Incorrect email! Please try again.", RED);
+        }
+        displayFooter();
+    }
+
+    void deleteUser() {
+        displayHeader("Delete User");
+        string username;
+
+        cout << YELLOW << "Enter Username: " << RESET;
+        cin >> username;
+
+        if (users.find(username) != users.end()) {
+            users.erase(username);
+            displayMessage("User deleted successfully.", GREEN);
+        } else {
+            displayMessage("User not found! Please check the username.", RED);
+        }
+        displayFooter();
+    }
+
+    void searchUser() {
+        displayHeader("Search User");
+        string username;
+
+        cout << YELLOW << "Enter Username: " << RESET;
+        cin >> username;
+
+        if (users.find(username) != users.end()) {
+            displayMessage("User Found: " + username, GREEN);
+        } else {
+            displayMessage("User not found.", RED);
+        }
+        displayFooter();
+    }
+
+    void displayMenu() const {
+        showLoading();
+        system("clear");
+       
+        displayHeader(" Welcome To My\n  Pharmacy Management System");
+        cout << MAGENTA << "1. Sign Up\n"
+             << "2. Log In\n"
+             << "3. Forget Password\n"
+             << "4. Delete User\n"
+             << "5. Search User\n"
+             << "6. Exit\n" << RESET;
+        showStatistics();
+        displayFooter();
+    }
+
+    void menu() {
+        int choice;
+
+        do {
+            displayMenu();
+
+            cout << YELLOW << "Enter your choice: " << RESET;
+            cin >> choice;
+
+            switch (choice) {
+                case 1:
+                    signUp();
+                    break;
+                case 2:
+                    login();
+                    break;
+                case 3:
+                    forgetPassword();
+                    break;
+                case 4:
+                    deleteUser();
+                    break;
+                case 5:
+                    searchUser();
+                    break;
+                case 6:
+                    displayMessage("Exiting the system. Thank you for using our services!", GREEN);
+                    displayMessage("We look forward to serving you again.", BLUE);
+                    break;
+                default:
+                    displayMessage("Invalid choice! Please enter a valid option.", RED);
+            }
+        } while (choice != 6);
+    }
+};
+
+int main() {
+    UserManagement userManager;
+    userManager.menu(); 
+    return 0;
+}
